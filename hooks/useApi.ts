@@ -41,5 +41,47 @@ export function useApi() {
 
     evaluateResponse: (params: Parameters<typeof api.evaluateResponse>[0]) =>
       tok().then((t) => api.evaluateResponse(params, t)),
+
+    // ── Writing ──────────────────────────────────────────────────────────────
+    // No auth required
+    generateWritingPrompt: api.generateWritingPrompt,
+
+    // Auth required
+    submitWriting: (params: Parameters<typeof api.submitWriting>[0]) =>
+      tok().then((t) => api.submitWriting(params, t)),
+
+    listWritingSubmissions: () =>
+      tok().then((t) => api.listWritingSubmissions(t)),
+
+    getWritingSubmission: (id: string) =>
+      tok().then((t) => api.getWritingSubmission(id, t)),
+
+    // ── Reading ───────────────────────────────────────────────────────────────
+    // No auth required
+    generateReadingPassage: api.generateReadingPassage,
+
+    // Auth required
+    submitReading: (params: Parameters<typeof api.submitReading>[0]) =>
+      tok().then((t) => api.submitReading(params, t)),
+
+    listReadingAttempts: () =>
+      tok().then((t) => api.listReadingAttempts(t)),
+
+    getReadingAttempt: (id: string) =>
+      tok().then((t) => api.getReadingAttempt(id, t)),
+
+    // ── Listening ─────────────────────────────────────────────────────────────
+    // No auth required
+    generateListeningScript: api.generateListeningScript,
+
+    // Auth required
+    submitListening: (params: Parameters<typeof api.submitListening>[0]) =>
+      tok().then((t) => api.submitListening(params, t)),
+
+    listListeningAttempts: () =>
+      tok().then((t) => api.listListeningAttempts(t)),
+
+    getListeningAttempt: (id: string) =>
+      tok().then((t) => api.getListeningAttempt(id, t)),
   };
 }

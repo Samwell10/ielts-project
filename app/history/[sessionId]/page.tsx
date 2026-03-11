@@ -33,7 +33,7 @@ export default function SessionDetailPage({ params }: { params: { sessionId: str
       >
         <div
           className="w-14 h-14 rounded-full flex items-center justify-center mx-auto"
-          style={{ background: "#312e81" }}
+          style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)" }}
         >
           <Play size={22} style={{ color: "var(--accent)" }} />
         </div>
@@ -49,8 +49,7 @@ export default function SessionDetailPage({ params }: { params: { sessionId: str
         <div className="flex justify-center gap-3 pt-2">
           <Link
             href="/setup"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white text-sm"
-            style={{ background: "var(--accent)" }}
+            className="btn-gradient flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white text-sm"
           >
             <Mic size={15} />
             New Practice Session

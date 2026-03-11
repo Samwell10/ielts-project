@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Mic, Square, ChevronRight, Clock, Volume2, AlertCircle } from "lucide-react";
+import { Mic, Square, ChevronRight, Clock, Volume2, AlertCircle, Play, RotateCcw } from "lucide-react";
 import type { ExamType, Difficulty, IELTSPart } from "@/types";
 import { useApi } from "@/hooks/useApi";
 
-type Phase = "loading" | "intro" | "question" | "recording" | "processing" | "between" | "done" | "error";
+type Phase = "loading" | "intro" | "question" | "recording" | "review" | "processing" | "between" | "done" | "error";
 
 function Timer({ seconds }: { seconds: number }) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -46,6 +46,29 @@ function AudioWave({ active }: { active: boolean }) {
   );
 }
 
+/** SVG countdown ring shown when < 10 seconds remain */
+function CountdownRing({ seconds }: { seconds: number }) {
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
+  const progress = seconds / 10;
+  const color = seconds <= 5 ? "#ef4444" : "#f59e0b";
+  return (
+    <div className="relative flex items-center justify-center w-20 h-20 mx-auto">
+      <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 64 64">
+        <circle cx="32" cy="32" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+        <circle
+          cx="32" cy="32" r={radius} fill="none"
+          stroke={color} strokeWidth="4" strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+          style={{ transition: "stroke-dashoffset 0.9s linear, stroke 0.3s" }}
+        />
+      </svg>
+      <span className="text-xl font-black z-10" style={{ color }}>{seconds}</span>
+    </div>
+  );
+}
+
 function SessionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -64,6 +87,7 @@ function SessionContent() {
   const [isRecording, setIsRecording] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [processingLabel, setProcessingLabel] = useState("Processing your response...");
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
 
   // Stable refs for use inside callbacks
   const currentQRef = useRef(0);
@@ -72,6 +96,7 @@ function SessionContent() {
   const sessionIdRef = useRef<string>("");
   const responseIdsRef = useRef<string[]>([]);
   const transcriptsRef = useRef<string[]>([]);
+  const pendingBlobRef = useRef<Blob | null>(null);
 
   useEffect(() => { currentQRef.current = currentQ; }, [currentQ]);
   useEffect(() => { elapsedRef.current = elapsed; }, [elapsed]);
@@ -81,7 +106,6 @@ function SessionContent() {
   useEffect(() => {
     async function init() {
       try {
-        // 1. Generate questions from GPT-4o
         const { questions: qs } = await api.generateQuestions({
           exam_type: examType,
           difficulty,
@@ -92,7 +116,6 @@ function SessionContent() {
         setQuestions(qs);
         questionsRef.current = qs;
 
-        // 2. Create session in database
         const { session_id } = await api.createSession({
           exam_type: examType,
           difficulty,
@@ -113,7 +136,7 @@ function SessionContent() {
 
   // ── Total elapsed timer ───────────────────────────────────────────────────
   useEffect(() => {
-    if (phase === "loading" || phase === "intro" || phase === "done" || phase === "error") return;
+    if (phase === "loading" || phase === "intro" || phase === "review" || phase === "done" || phase === "error") return;
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
   }, [phase]);
@@ -123,7 +146,7 @@ function SessionContent() {
     if (mediaRef.current && mediaRef.current.state !== "inactive") {
       mediaRef.current.stop();
       setIsRecording(false);
-      setPhase("processing");
+      // phase transitions to "review" inside mr.onstop
     }
   }, []);
 
@@ -141,20 +164,19 @@ function SessionContent() {
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
-  // ── Process audio after recording stops ──────────────────────────────────
+  // ── Process audio (called after user confirms review) ─────────────────────
   const processRecording = useCallback(async (audioBlob: Blob) => {
     const qIndex = currentQRef.current;
     const qs = questionsRef.current;
     const sessionId = sessionIdRef.current;
 
+    setPhase("processing");
     try {
-      // Step 1: Transcribe (returns Gemini file URI for audio-based pronunciation scoring)
       setProcessingLabel("Transcribing your response...");
       const { transcript, duration_seconds, audio_url, gemini_file_uri, gemini_file_name } =
         await api.uploadAndTranscribe(audioBlob);
       transcriptsRef.current = [...transcriptsRef.current, transcript];
 
-      // Step 2: Save response row
       setProcessingLabel("Saving response...");
       const { response_id } = await api.addResponse(sessionId, {
         question_index: qIndex,
@@ -165,7 +187,6 @@ function SessionContent() {
       });
       responseIdsRef.current = [...responseIdsRef.current, response_id];
 
-      // Step 3: AI evaluation — pass audio URI so Gemini can score pronunciation from real audio
       setProcessingLabel("Evaluating with AI...");
       await api.evaluateResponse({
         session_id: sessionId,
@@ -178,13 +199,14 @@ function SessionContent() {
         gemini_file_name,
       });
 
-      // Step 4: Advance
       const isLast = qIndex >= qs.length - 1;
       if (isLast) {
         setProcessingLabel("Finalising your session...");
         await api.completeSession(sessionId, elapsedRef.current);
+        pendingBlobRef.current = null;
         setPhase("done");
       } else {
+        pendingBlobRef.current = null;
         setPhase("between");
       }
     } catch (e: unknown) {
@@ -192,7 +214,7 @@ function SessionContent() {
       setErrorMsg(`Processing failed: ${msg}`);
       setPhase("error");
     }
-  }, [examType, difficulty]);
+  }, [examType, difficulty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Start recording ───────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
@@ -204,7 +226,11 @@ function SessionContent() {
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        processRecording(blob);
+        // Store blob for review — do NOT process yet
+        pendingBlobRef.current = blob;
+        const url = URL.createObjectURL(blob);
+        setReviewUrl(url);
+        setPhase("review");
       };
       mr.start();
       mediaRef.current = mr;
@@ -214,7 +240,20 @@ function SessionContent() {
     } catch {
       alert("Microphone access is required. Please allow microphone permission and try again.");
     }
-  }, [processRecording]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function reRecord() {
+    if (reviewUrl) URL.revokeObjectURL(reviewUrl);
+    setReviewUrl(null);
+    pendingBlobRef.current = null;
+    setPhase("question");
+    setTimeLeft(120);
+  }
+
+  function submitReview() {
+    if (!pendingBlobRef.current) return;
+    processRecording(pendingBlobRef.current);
+  }
 
   function nextQuestion() {
     setCurrentQ((q) => q + 1);
@@ -245,7 +284,7 @@ function SessionContent() {
       <div className="max-w-2xl mx-auto text-center space-y-6 py-16">
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center mx-auto"
-          style={{ background: "#450a0a" }}
+          style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)" }}
         >
           <AlertCircle size={28} style={{ color: "var(--danger)" }} />
         </div>
@@ -255,13 +294,33 @@ function SessionContent() {
           </h2>
           <p className="text-sm" style={{ color: "var(--muted)" }}>{errorMsg}</p>
         </div>
-        <button
-          onClick={() => router.push("/setup")}
-          className="px-6 py-3 rounded-xl font-semibold text-white"
-          style={{ background: "var(--accent)" }}
-        >
-          Back to Setup
-        </button>
+        {/* Retry options — only shown if we still have the audio blob */}
+        {pendingBlobRef.current ? (
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={() => processRecording(pendingBlobRef.current!)}
+              className="px-6 py-3 rounded-xl font-semibold text-white flex items-center gap-2 justify-center"
+              style={{ background: "var(--accent)" }}
+            >
+              <Play size={16} /> Re-submit audio
+            </button>
+            <button
+              onClick={reRecord}
+              className="px-6 py-3 rounded-xl font-semibold flex items-center gap-2 justify-center"
+              style={{ background: "var(--card)", border: "1px solid var(--card-border)", color: "var(--foreground)" }}
+            >
+              <RotateCcw size={16} /> Re-record instead
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => router.push("/setup")}
+            className="px-6 py-3 rounded-xl font-semibold text-white"
+            style={{ background: "var(--accent)" }}
+          >
+            Back to Setup
+          </button>
+        )}
       </div>
     );
   }
@@ -272,7 +331,7 @@ function SessionContent() {
       <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
         <div
           className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
-          style={{ background: "#312e81" }}
+          style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)" }}
         >
           <Volume2 size={32} style={{ color: "var(--accent)" }} />
         </div>
@@ -293,8 +352,8 @@ function SessionContent() {
             <li>You will be asked {questions.length} question{questions.length !== 1 ? "s" : ""}.</li>
             <li>Press <strong style={{ color: "var(--foreground)" }}>Start Recording</strong> when ready.</li>
             <li>You have up to 2 minutes per answer.</li>
+            <li>After recording, you can replay and re-record before submitting.</li>
             <li>Speak clearly and at a natural pace.</li>
-            <li>Your responses are transcribed and evaluated automatically by AI.</li>
           </ul>
         </div>
         <button
@@ -314,7 +373,7 @@ function SessionContent() {
       <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
         <div
           className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
-          style={{ background: "#14532d" }}
+          style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)" }}
         >
           <ChevronRight size={32} style={{ color: "var(--success)" }} />
         </div>
@@ -338,15 +397,77 @@ function SessionContent() {
     );
   }
 
+  // ── Render: review phase ──────────────────────────────────────────────────
+  if (phase === "review") {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Progress dots */}
+        <div className="flex items-center justify-center gap-2">
+          {questions.map((_, i) => (
+            <div
+              key={i}
+              className="rounded-full transition-all"
+              style={{
+                width: i === currentQ ? "24px" : "8px",
+                height: "8px",
+                background: i < currentQ ? "var(--success)" : i === currentQ ? "var(--accent)" : "var(--card-border)",
+              }}
+            />
+          ))}
+        </div>
+
+        <div
+          className="p-6 rounded-2xl space-y-3"
+          style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--muted)" }}>
+            Question {currentQ + 1}
+          </p>
+          <p className="text-xl font-medium leading-relaxed" style={{ color: "var(--foreground)" }}>
+            {questions[currentQ]}
+          </p>
+        </div>
+
+        <div
+          className="p-6 rounded-2xl space-y-5 text-center"
+          style={{ background: "var(--card)", border: "1px solid rgba(139,92,246,0.35)" }}
+        >
+          <div>
+            <p className="font-semibold text-base" style={{ color: "var(--foreground)" }}>Review your answer</p>
+            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+              Listen back before submitting. You can re-record if needed.
+            </p>
+          </div>
+          {reviewUrl && (
+            <audio controls className="w-full" src={reviewUrl} style={{ colorScheme: "dark" }} />
+          )}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={reRecord}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold justify-center"
+              style={{ background: "var(--card)", border: "1px solid var(--card-border)", color: "var(--foreground)" }}
+            >
+              <RotateCcw size={15} /> Re-record
+            </button>
+            <button
+              onClick={submitReview}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-white justify-center"
+              style={{ background: "var(--accent)" }}
+            >
+              Submit Answer <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Render: active session ────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span
-          className="text-xs font-semibold uppercase tracking-widest px-2 py-1 rounded"
-          style={{ background: "#312e81", color: "#a5b4fc" }}
-        >
+        <span className="tag-purple text-xs font-semibold uppercase tracking-widest px-2 py-1 rounded">
           {examType} {examType === "IELTS" ? part : ""}
         </span>
         <div className="flex items-center gap-2" style={{ color: "var(--muted)" }}>
@@ -355,18 +476,19 @@ function SessionContent() {
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs" style={{ color: "var(--muted)" }}>
-          <span>Question {currentQ + 1} of {questions.length}</span>
-          <span>{Math.round((currentQ / questions.length) * 100)}% complete</span>
-        </div>
-        <div className="h-1.5 rounded-full" style={{ background: "var(--card-border)" }}>
+      {/* Progress dots */}
+      <div className="flex items-center justify-center gap-2">
+        {questions.map((_, i) => (
           <div
-            className="h-1.5 rounded-full transition-all"
-            style={{ width: `${(currentQ / questions.length) * 100}%`, background: "var(--accent)" }}
+            key={i}
+            className="rounded-full transition-all"
+            style={{
+              width: i === currentQ ? "24px" : "8px",
+              height: "8px",
+              background: i < currentQ ? "var(--success)" : i === currentQ ? "var(--accent)" : "var(--card-border)",
+            }}
           />
-        </div>
+        ))}
       </div>
 
       {/* Question card */}
@@ -375,7 +497,7 @@ function SessionContent() {
         style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}
       >
         <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--muted)" }}>
-          Question {currentQ + 1}
+          Question {currentQ + 1} of {questions.length}
         </p>
         <p className="text-xl font-medium leading-relaxed" style={{ color: "var(--foreground)" }}>
           {questions[currentQ]}
@@ -412,10 +534,15 @@ function SessionContent() {
           </div>
         ) : (
           <>
-            <div className="flex justify-center">
-              <AudioWave active={isRecording} />
-            </div>
-            {isRecording && (
+            {/* Countdown ring appears in final 10 seconds */}
+            {isRecording && timeLeft <= 10 ? (
+              <CountdownRing seconds={timeLeft} />
+            ) : (
+              <div className="flex justify-center">
+                <AudioWave active={isRecording} />
+              </div>
+            )}
+            {isRecording && timeLeft > 10 && (
               <div className="flex items-center justify-center gap-2 text-sm" style={{ color: "var(--muted)" }}>
                 <span>Time remaining:</span>
                 <Timer seconds={timeLeft} />

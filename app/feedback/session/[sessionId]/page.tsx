@@ -140,7 +140,7 @@ export default function SessionFeedbackPage() {
               </div>
               <div
                 className="shrink-0 text-xl font-black px-4 py-1.5 rounded-xl"
-                style={{ background: "#1e293b", color }}
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color }}
               >
                 {rScore.toFixed(1)}
               </div>
@@ -178,47 +178,123 @@ export default function SessionFeedbackPage() {
         );
       })}
 
-      {/* Summary tips from last response if available */}
-      {session.responses.length > 0 && (
-        <div
-          className="p-6 rounded-2xl space-y-4"
-          style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}
-        >
-          <h2 className="font-bold text-lg flex items-center gap-2" style={{ color: "var(--foreground)" }}>
-            <BookOpen size={18} style={{ color: "var(--accent)" }} />
-            Keep Improving
-          </h2>
-          <ul className="space-y-3">
-            {[
-              "Review your transcripts and look for repeated grammar errors.",
-              "Practise extending answers with 'for example…' and 'such as…'.",
-              "Record yourself daily for 5 minutes on a random topic.",
-              "Focus on the criteria where your score was lowest this session.",
-            ].map((tip, i) => (
-              <li key={i} className="flex gap-3">
-                <CheckCircle size={16} className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
-                <span className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>{tip}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Dynamic tips keyed to lowest-scoring criterion */}
+      {session.responses.length > 0 && (() => {
+        // Compute average per criterion across all responses
+        const isIELTSSession = session.exam_type === "IELTS";
+        const criteriaAvg = isIELTSSession ? {
+          "Fluency & Coherence": session.responses.reduce((s, r) => s + (r.fluency_coherence ?? 0), 0) / session.responses.length,
+          "Lexical Resource": session.responses.reduce((s, r) => s + (r.lexical_resource ?? 0), 0) / session.responses.length,
+          "Grammatical Range": session.responses.reduce((s, r) => s + (r.grammatical_range ?? 0), 0) / session.responses.length,
+          "Pronunciation": session.responses.reduce((s, r) => s + (r.pronunciation ?? 0), 0) / session.responses.length,
+        } : {
+          "Content & Coherence": session.responses.reduce((s, r) => s + (r.content_coherence ?? 0), 0) / session.responses.length,
+          "Vocabulary": session.responses.reduce((s, r) => s + (r.vocabulary ?? 0), 0) / session.responses.length,
+          "Listenability": session.responses.reduce((s, r) => s + (r.listenability ?? 0), 0) / session.responses.length,
+          "Task Fulfillment": session.responses.reduce((s, r) => s + (r.task_fulfillment ?? 0), 0) / session.responses.length,
+        };
+        const lowest = Object.entries(criteriaAvg).sort(([, a], [, b]) => a - b)[0]?.[0] ?? "";
+
+        const CRITERION_TIPS: Record<string, string[]> = {
+          "Fluency & Coherence": [
+            "Reduce filler words ('um', 'uh', 'like') — pause silently instead to sound more natural.",
+            "Use discourse markers like 'firstly', 'on the other hand', 'to sum up' to link ideas smoothly.",
+            "Practise speaking non-stop for 60 seconds on random topics to build fluency stamina.",
+            "Record yourself, then transcribe — you will spot where you lose coherence.",
+          ],
+          "Lexical Resource": [
+            "Paraphrase question keywords instead of repeating them word-for-word.",
+            "Learn 3 collocations a day (e.g. 'make a decision', 'heavy traffic') and use them actively.",
+            "Aim to use at least one idiomatic expression per answer without forcing it.",
+            "Read English news articles and note how writers express complex ideas concisely.",
+          ],
+          "Grammatical Range": [
+            "Mix simple, compound, and complex sentences — avoid relying only on short sentences.",
+            "Practise conditionals (If I had…, Were I to…) and passive voice in your answers.",
+            "Use a variety of tenses: present perfect for experience, past simple for events, future for plans.",
+            "After each session, pick one grammar error from your transcript and drill it for 5 minutes.",
+          ],
+          "Pronunciation": [
+            "Focus on word stress — mis-stressing a word is more confusing than a slight accent.",
+            "Practise linking: 'turned off' → 'turned_off', 'an apple' → 'an_apple'.",
+            "Shadow native-speaker audio: pause after each sentence and repeat with identical rhythm.",
+            "Record yourself and compare your pronunciation with a reference speaker on the same passage.",
+          ],
+          "Content & Coherence": [
+            "Structure each answer: point → reason → example → conclusion.",
+            "Stay on topic — re-read the question mentally before speaking if you drift.",
+            "Use examples from personal experience to add authenticity and detail.",
+            "Practice PEEL: Point, Evidence, Explanation, Link-back.",
+          ],
+          "Vocabulary": [
+            "Replace general words with precise ones: 'good' → 'beneficial', 'bad' → 'detrimental'.",
+            "Learn synonyms for common exam topics: environment, technology, health, education.",
+            "Use context clues when you don't know a word — paraphrase confidently.",
+            "Keep a vocabulary journal and review it before each practice session.",
+          ],
+          "Listenability": [
+            "Speak at a steady pace — slowing down slightly improves clarity more than speaking fast.",
+            "Articulate final consonants clearly ('want' not 'wan', 'asked' not 'ask').",
+            "Use intonation to highlight key words — this helps listeners follow your main point.",
+            "Reduce background noise and ensure your microphone is close when recording.",
+          ],
+          "Task Fulfillment": [
+            "Answer the question directly in your first sentence, then expand.",
+            "If given a cue card, cover all bullet points — examiners check each one.",
+            "Don't go off on tangents; return to the question after each supporting point.",
+            "Practise summarising your answer in one sentence at the end.",
+          ],
+        };
+
+        const tips = CRITERION_TIPS[lowest] ?? [
+          "Review your transcripts and look for repeated grammar errors.",
+          "Practise extending answers with 'for example…' and 'such as…'.",
+          "Record yourself daily for 5 minutes on a random topic.",
+          "Focus on the criteria where your score was lowest this session.",
+        ];
+
+        return (
+          <div
+            className="p-6 rounded-2xl space-y-4"
+            style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}
+          >
+            <h2 className="font-bold text-lg flex items-center gap-2" style={{ color: "var(--foreground)" }}>
+              <BookOpen size={18} style={{ color: "var(--accent)" }} />
+              Keep Improving
+            </h2>
+            {lowest && (
+              <p className="text-xs px-3 py-1.5 rounded-lg w-fit"
+                style={{ background: "rgba(139,92,246,0.12)", color: "#c4b5fd", border: "1px solid rgba(139,92,246,0.25)" }}>
+                Focus area: <strong>{lowest}</strong>
+              </p>
+            )}
+            <ul className="space-y-3">
+              {tips.map((tip, i) => (
+                <li key={i} className="flex gap-3">
+                  <CheckCircle size={16} className="mt-0.5 shrink-0" style={{ color: "var(--accent)" }} />
+                  <span className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Actions */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 pb-8">
+        <Link
+          href="/dashboard"
+          className="flex-1 py-3 rounded-xl font-semibold text-center flex items-center justify-center gap-2"
+          style={{ background: "var(--card)", border: "1px solid var(--card-border)", color: "var(--foreground)" }}
+        >
+          Back to Dashboard
+        </Link>
         <Link
           href="/setup"
           className="flex-1 py-3 rounded-xl font-semibold text-white text-center flex items-center justify-center gap-2"
           style={{ background: "var(--accent)" }}
         >
-          <Mic size={16} /> Practice Again
-        </Link>
-        <Link
-          href="/history"
-          className="flex-1 py-3 rounded-xl font-semibold text-center flex items-center justify-center gap-2"
-          style={{ background: "var(--card)", border: "1px solid var(--card-border)", color: "var(--foreground)" }}
-        >
-          View History <ChevronRight size={16} />
+          <Mic size={16} /> Try another Speaking
         </Link>
       </div>
     </div>

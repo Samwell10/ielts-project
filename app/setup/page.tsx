@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Mic } from "lucide-react";
 import type { ExamType, Difficulty, IELTSPart } from "@/types";
 
 const IELTS_TOPICS = [
@@ -31,23 +31,26 @@ const CELPIP_TOPICS = [
 
 const IELTS_PARTS: IELTSPart[] = ["Part 1", "Part 2", "Part 3"];
 
-function SelectCard({
-  label,
-  selected,
-  onClick,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
+const PART_DESC: Record<IELTSPart, string> = {
+  "Part 1": "Short questions about yourself and familiar topics (4–5 min)",
+  "Part 2": "1-minute preparation then 2-minute monologue on a cue card",
+  "Part 3": "Abstract discussion and opinion questions (4–5 min)",
+};
+
+function Pill({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="px-4 py-2.5 rounded-xl text-sm font-medium transition-all border"
-      style={{
-        background: selected ? "var(--accent)" : "var(--card)",
-        borderColor: selected ? "var(--accent)" : "var(--card-border)",
-        color: selected ? "white" : "var(--muted)",
+      className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+      style={selected ? {
+        background: "rgba(139, 92, 246, 0.16)",
+        border: "1px solid rgba(139, 92, 246, 0.55)",
+        color: "#c4b5fd",
+        boxShadow: "0 0 0 1px rgba(139, 92, 246, 0.2)",
+      } : {
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid var(--card-border)",
+        color: "var(--muted)",
       }}
     >
       {label}
@@ -58,9 +61,7 @@ function SelectCard({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: "var(--muted)" }}>
-        {title}
-      </h2>
+      <div className="section-label">{title}</div>
       {children}
     </div>
   );
@@ -68,19 +69,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function SetupPage() {
   const router = useRouter();
-  const [examType, setExamType] = useState<ExamType>("IELTS");
+  const [examType, setExamType]     = useState<ExamType>("IELTS");
   const [difficulty, setDifficulty] = useState<Difficulty>("Intermediate");
-  const [topic, setTopic] = useState<string>("");
-  const [part, setPart] = useState<IELTSPart>("Part 1");
+  const [topic, setTopic]           = useState<string>("");
+  const [part, setPart]             = useState<IELTSPart>("Part 1");
 
   const topics = examType === "IELTS" ? IELTS_TOPICS : CELPIP_TOPICS;
 
   function handleStart() {
     if (!topic) return;
     const params = new URLSearchParams({
-      examType,
-      difficulty,
-      topic,
+      examType, difficulty, topic,
       ...(examType === "IELTS" ? { part } : {}),
     });
     router.push(`/session?${params.toString()}`);
@@ -88,88 +87,76 @@ export default function SetupPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold" style={{ color: "var(--foreground)" }}>
-          Practice Setup
-        </h1>
-        <p className="mt-1" style={{ color: "var(--muted)" }}>
-          Configure your speaking session before you begin.
-        </p>
+
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ background: "linear-gradient(135deg, #8b5cf6, #6366f1)" }}>
+          <Mic size={22} color="white" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black tracking-tight" style={{ color: "var(--foreground)" }}>
+            Speaking Practice
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: "var(--muted)" }}>
+            Configure your session and start speaking with the AI examiner.
+          </p>
+        </div>
       </div>
 
-      <div
-        className="p-6 rounded-2xl space-y-8"
-        style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}
-      >
-        {/* Exam Type */}
+      {/* Form card */}
+      <div className="rounded-3xl p-7 space-y-8"
+        style={{ background: "var(--card)", border: "1px solid var(--card-border)" }}>
+
         <Section title="Exam Type">
           <div className="flex gap-3">
             {(["IELTS", "CELPIP"] as ExamType[]).map((e) => (
-              <SelectCard
-                key={e}
-                label={e}
-                selected={examType === e}
-                onClick={() => {
-                  setExamType(e);
-                  setTopic("");
-                }}
-              />
+              <Pill key={e} label={e} selected={examType === e}
+                onClick={() => { setExamType(e); setTopic(""); }} />
             ))}
           </div>
         </Section>
 
-        {/* IELTS Part */}
         {examType === "IELTS" && (
           <Section title="IELTS Part">
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               {IELTS_PARTS.map((p) => (
-                <SelectCard key={p} label={p} selected={part === p} onClick={() => setPart(p)} />
+                <Pill key={p} label={p} selected={part === p} onClick={() => setPart(p)} />
               ))}
             </div>
-            <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
-              {part === "Part 1" && "Short questions about yourself and familiar topics (4–5 min)"}
-              {part === "Part 2" && "1-minute preparation then 2-minute monologue on a cue card"}
-              {part === "Part 3" && "Abstract discussion and opinion questions (4–5 min)"}
+            <p className="text-xs mt-1 pl-0.5" style={{ color: "var(--muted)" }}>
+              {PART_DESC[part]}
             </p>
           </Section>
         )}
 
-        {/* Difficulty */}
         <Section title="Difficulty Level">
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             {(["Beginner", "Intermediate", "Advanced"] as Difficulty[]).map((d) => (
-              <SelectCard key={d} label={d} selected={difficulty === d} onClick={() => setDifficulty(d)} />
+              <Pill key={d} label={d} selected={difficulty === d} onClick={() => setDifficulty(d)} />
             ))}
           </div>
         </Section>
 
-        {/* Topic */}
         <Section title="Topic">
           <div className="flex flex-wrap gap-2">
             {topics.map((t) => (
-              <SelectCard key={t} label={t} selected={topic === t} onClick={() => setTopic(t)} />
+              <Pill key={t} label={t} selected={topic === t} onClick={() => setTopic(t)} />
             ))}
           </div>
         </Section>
 
-        {/* Summary */}
         {topic && (
-          <div
-            className="p-4 rounded-xl space-y-1 text-sm"
-            style={{ background: "#1e1b4b", border: "1px solid #312e81" }}
-          >
-            <p style={{ color: "#a5b4fc" }} className="font-medium">
+          <div className="p-4 rounded-2xl space-y-1 text-sm"
+            style={{ background: "rgba(139, 92, 246, 0.08)", border: "1px solid rgba(139, 92, 246, 0.25)" }}>
+            <p className="font-semibold text-xs uppercase tracking-widest" style={{ color: "#a78bfa" }}>
               Session Summary
             </p>
             <p style={{ color: "var(--muted)" }}>
-              <span style={{ color: "var(--foreground)" }}>{examType}</span>
-              {examType === "IELTS" && (
-                <span> · {part}</span>
-              )}
-              {" · "}
-              <span style={{ color: "var(--foreground)" }}>{difficulty}</span>
-              {" · "}
-              <span style={{ color: "var(--foreground)" }}>{topic}</span>
+              <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{examType}</span>
+              {examType === "IELTS" && <span> · {part}</span>}
+              <span> · {difficulty} · </span>
+              <span style={{ color: "var(--foreground)", fontWeight: 600 }}>{topic}</span>
             </p>
           </div>
         )}
@@ -177,15 +164,14 @@ export default function SetupPage() {
         <button
           onClick={handleStart}
           disabled={!topic}
-          className="w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-opacity"
-          style={{
-            background: topic ? "var(--accent)" : "#334155",
-            opacity: topic ? 1 : 0.5,
-            cursor: topic ? "pointer" : "not-allowed",
-          }}
+          className="w-full py-3.5 rounded-2xl font-semibold flex items-center justify-center gap-2 transition-all"
+          style={topic
+            ? { background: "linear-gradient(135deg, #8b5cf6, #d946ef)", color: "white", boxShadow: "0 4px 20px rgba(139,92,246,0.4)" }
+            : { background: "rgba(255,255,255,0.04)", color: "var(--muted)", border: "1px solid var(--card-border)", cursor: "not-allowed" }
+          }
         >
-          Start Session
-          <ChevronRight size={18} />
+          {topic ? "Start Speaking" : "Select a topic to continue"}
+          {topic && <ChevronRight size={18} />}
         </button>
       </div>
     </div>

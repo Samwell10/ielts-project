@@ -5,7 +5,7 @@ import os
 
 from models.database import Base, engine
 import models.db_models  # noqa: F401 — ensures models are registered before create_all
-from routers import questions, audio, evaluation, sessions
+from routers import questions, audio, evaluation, sessions, writing, reading, listening
 from config import AUDIO_STORAGE_PATH, ALLOWED_ORIGINS
 
 # Create all database tables on startup
@@ -39,6 +39,9 @@ app.include_router(questions.router)
 app.include_router(audio.router)
 app.include_router(evaluation.router)
 app.include_router(sessions.router)
+app.include_router(writing.router)
+app.include_router(reading.router)
+app.include_router(listening.router)
 
 
 @app.get("/")
