@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Float, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from models.database import Base
 
@@ -131,3 +131,68 @@ class ListeningAttempt(Base):
     estimated_band       = Column(String,  nullable=True)   # "Band 7" or "Level 9"
     time_spent_seconds   = Column(Integer, nullable=True)
     created_at           = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ── User Profile (onboarding) ────────────────────────────────────────────────
+
+class UserProfile(Base):
+    """One row per user — stores onboarding answers and exam goals."""
+    __tablename__ = "user_profiles"
+
+    user_id        = Column(String, primary_key=True)
+    exam_type      = Column(String, nullable=False, default="IELTS")  # "IELTS" | "CELPIP" | "Both"
+    target_band    = Column(String, nullable=True)   # e.g. "7.0", "8.0" (IELTS) or "9" (CELPIP)
+    exam_date      = Column(String, nullable=True)   # ISO date "YYYY-MM-DD" or null if not scheduled
+    current_level  = Column(String, nullable=False, default="Intermediate")  # "Beginner" | "Intermediate" | "Advanced"
+    onboarding_done = Column(Boolean, nullable=False, default=False)
+    created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                            onupdate=lambda: datetime.now(timezone.utc))
+
+
+# ── Gamification ──────────────────────────────────────────────────────────────
+
+class UserXP(Base):
+    """Cumulative XP ledger — one row per user."""
+    __tablename__ = "user_xp"
+
+    user_id      = Column(String, primary_key=True)
+    total_xp     = Column(Integer, nullable=False, default=0)
+    level        = Column(Integer, nullable=False, default=1)
+    updated_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                          onupdate=lambda: datetime.now(timezone.utc))
+
+
+class UserStreak(Base):
+    """Daily practice streak — one row per user."""
+    __tablename__ = "user_streaks"
+
+    user_id         = Column(String, primary_key=True)
+    current_streak  = Column(Integer, nullable=False, default=0)
+    longest_streak  = Column(Integer, nullable=False, default=0)
+    last_active_date = Column(String, nullable=True)   # ISO date "YYYY-MM-DD"
+    updated_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                             onupdate=lambda: datetime.now(timezone.utc))
+
+
+class UserBadge(Base):
+    """Awarded achievement badges — one row per user+badge."""
+    __tablename__ = "user_badges"
+
+    id         = Column(String, primary_key=True, default=new_uuid)
+    user_id    = Column(String, nullable=False, index=True)
+    badge_id   = Column(String, nullable=False)   # e.g. "first_session", "7_day_streak"
+    awarded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class DailyGoal(Base):
+    """Daily goal tracking — one row per user per calendar day."""
+    __tablename__ = "daily_goals"
+
+    id            = Column(String, primary_key=True, default=new_uuid)
+    user_id       = Column(String, nullable=False, index=True)
+    date          = Column(String, nullable=False)    # "YYYY-MM-DD"
+    target_xp     = Column(Integer, nullable=False, default=100)
+    earned_xp     = Column(Integer, nullable=False, default=0)
+    completed     = Column(Boolean, nullable=False, default=False)
+    created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))

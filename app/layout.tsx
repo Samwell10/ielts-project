@@ -1,14 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Inter } from "next/font/google";
-import Navbar from "@/components/Navbar";
-
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-});
 
 export const metadata: Metadata = {
   title: "PrepAI — IELTS & CELPIP Practice",
@@ -17,12 +9,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
-      <html lang="en" className={inter.variable}>
-        <body className="min-h-screen antialiased">
-          <Navbar />
-          <main className="mx-auto">{children}</main>
-        </body>
+    <ClerkProvider signInFallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/onboarding">
+      <html lang="en">
+        <body className="min-h-screen antialiased">{children}</body>
       </html>
     </ClerkProvider>
   );

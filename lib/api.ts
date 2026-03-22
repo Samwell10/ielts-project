@@ -433,3 +433,102 @@ export async function listListeningAttempts(token: string): Promise<ListeningAtt
 export async function getListeningAttempt(id: string, token: string): Promise<ListeningAttemptRecord> {
   return request(`/api/listening/${id}`, { token });
 }
+
+// ── Gamification ──────────────────────────────────────────────────────────────
+
+export interface XPStatus {
+  total_xp: number;
+  level: number;
+  next_level_xp: number;
+  level_pct: number;   // 0.0–1.0
+  streak: number;
+}
+
+export interface AwardXPResult {
+  total_xp: number;
+  xp_gained: number;
+  level: number;
+  next_level_xp: number;
+  level_up: boolean;
+  new_badges: string[];
+  streak: number;
+}
+
+export interface BadgeRecord {
+  badge_id: string;
+  name: string;
+  icon: string;
+  description: string;
+  awarded_at: string;
+}
+
+export interface DailyGoalRecord {
+  date: string;
+  target_xp: number;
+  earned_xp: number;
+  completed: boolean;
+  pct: number;
+}
+
+export async function getGamificationStatus(userId: string, token: string): Promise<XPStatus> {
+  return request(`/api/gamification/status/${userId}`, { token });
+}
+
+export async function awardXP(
+  params: {
+    user_id: string;
+    module: string;
+    bonus_xp?: number;
+    first_session?: boolean;
+  },
+  token: string
+): Promise<AwardXPResult> {
+  return request("/api/gamification/xp/award", {
+    method: "POST",
+    body: JSON.stringify(params),
+    token,
+  });
+}
+
+export async function getBadges(userId: string, token: string): Promise<BadgeRecord[]> {
+  return request(`/api/gamification/badges/${userId}`, { token });
+}
+
+export async function getDailyGoal(userId: string, token: string): Promise<DailyGoalRecord> {
+  return request(`/api/gamification/daily-goal/${userId}`, { token });
+}
+
+// ── User Profile ──────────────────────────────────────────────────────────────
+
+export interface UserProfileRecord {
+  user_id: string;
+  exam_type: string;           // "IELTS" | "CELPIP" | "Both"
+  target_band: string | null;  // "7.0" | "9" etc.
+  exam_date: string | null;    // "YYYY-MM-DD" or null
+  current_level: string;       // "Beginner" | "Intermediate" | "Advanced"
+  onboarding_done: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getProfile(userId: string, token: string): Promise<UserProfileRecord> {
+  return request(`/api/profile/${userId}`, { token });
+}
+
+export async function saveProfile(
+  userId: string,
+  data: {
+    exam_type: string;
+    target_band: string | null;
+    exam_date: string | null;
+    current_level: string;
+    onboarding_done?: boolean;
+  },
+  token: string
+): Promise<UserProfileRecord> {
+  return request(`/api/profile/${userId}`, {
+    method: "POST",
+    body: JSON.stringify({ onboarding_done: true, ...data }),
+    token,
+  });
+}

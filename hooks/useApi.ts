@@ -83,5 +83,18 @@ export function useApi() {
 
     getListeningAttempt: (id: string) =>
       tok().then((t) => api.getListeningAttempt(id, t)),
+
+    // ── Gamification ──────────────────────────────────────────────────────────
+    getGamificationStatus: (userId: string) =>
+      tok().then((t) => api.getGamificationStatus(userId, t)),
+
+    awardXP: (params: Parameters<typeof api.awardXP>[0]) =>
+      tok().then((t) => api.awardXP(params, t)),
+
+    getBadges: (userId: string) =>
+      tok().then((t) => api.getBadges(userId, t)),
+
+    getDailyGoal: (userId: string) =>
+      tok().then((t) => api.getDailyGoal(userId, t)),
   };
 }
