@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { RedirectToSignIn } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
@@ -159,6 +159,14 @@ function ModuleCard({
 /* ── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StudyPlanPage() {
+  return (
+    <Suspense fallback={<Skeleton />}>
+      <StudyPlanContent />
+    </Suspense>
+  );
+}
+
+function StudyPlanContent() {
   const { isSignedIn, isLoaded, getToken, userId } = useAuth();
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
