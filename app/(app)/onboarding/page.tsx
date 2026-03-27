@@ -290,13 +290,14 @@ export default function OnboardingPage() {
                     value={data.exam_date ?? ""}
                     min={new Date().toISOString().split("T")[0]}
                     onChange={(e) => setData((d) => ({ ...d, exam_date: e.target.value || null }))}
+                    onClick={(e) => { try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {} }}
                     style={{
                       width: "100%",
                       padding: "0.875rem 1rem",
                       borderRadius: "0.75rem",
                       border: "2px solid rgba(255,255,255,0.12)",
                       background: "rgba(255,255,255,0.05)",
-                      color: "var(--foreground)",
+                      color: "black",
                       fontSize: "1rem",
                       outline: "none",
                       boxSizing: "border-box",
